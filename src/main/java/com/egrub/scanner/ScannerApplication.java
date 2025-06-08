@@ -14,7 +14,6 @@ import java.util.List;
 public class ScannerApplication {
 
     public static void main(String[] args) {
-
         SpringApplication.run(ScannerApplication.class, args);
     }
 

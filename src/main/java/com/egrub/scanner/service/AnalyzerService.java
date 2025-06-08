@@ -25,6 +25,15 @@ public class AnalyzerService {
 
     private final static Map<String, List<AnomalyData>> scripAnomalies = new HashMap<>();
 
+    private final static Map<String, Map<String, List<CandleData>>> STOCK_HISTORICAL_DATA =
+            new HashMap<>();
+
+    private final static Map<String, String> INTERVAL_MAP = Map.of(
+            "1", "days",
+            "5", "minutes",
+            "30", "minutes",
+            "240", "minutes");
+
     public AnalyzerService(EmailService emailService,
                            UpStoxService upStoxService) {
         this.emailService = emailService;
@@ -33,14 +42,11 @@ public class AnalyzerService {
 
     public void populateDigests(String instrumentKey,
                                 String instrumentCode,
-                                String interval,
-                                String unit,
                                 String fromDate,
-                                String toDate,
                                 String accessToken,
                                 int lookbackPeriod) {
-        log.info("loading history for:{}, from: {}, to:{}  ",
-                instrumentCode, fromDate, toDate);
+        log.info("loading history for:{}, from: {} ",
+                instrumentCode, fromDate);
 
         TDigestHelper digestHelper;
         if (T_DIGEST_HELPER_MAP.containsKey(instrumentCode)) {
@@ -49,15 +55,28 @@ public class AnalyzerService {
             digestHelper = new TDigestHelper();
             T_DIGEST_HELPER_MAP.put(instrumentCode, digestHelper);
         }
+        Map<String, List<CandleData>> unitCandleMap = new HashMap<>();
 
-        List<CandleData> candles = upStoxService.getHistoricalCandles(
-                instrumentKey,
-                instrumentCode,
-                interval,
-                unit,
-                getPreviousDate(fromDate),
-                getStartDate(toDate, lookbackPeriod),
-                accessToken);
+        INTERVAL_MAP.forEach(
+                (key, value) -> {
+                    List<CandleData> candles = upStoxService.getHistoricalCandles(
+                            instrumentKey,
+                            instrumentCode,
+                            key,
+                            value,
+                            getPreviousDate(fromDate),
+                            getStartDate(fromDate, lookbackPeriod),
+                            accessToken);
+
+                    unitCandleMap.put(key + "-" + value, candles);
+                });
+
+        STOCK_HISTORICAL_DATA.put(instrumentCode, unitCandleMap);
+
+        // Get the 5 minute candles
+        List<CandleData> candles = STOCK_HISTORICAL_DATA
+                .get(instrumentCode)
+                .get("5-minutes");
 
         int size = candles.size();
 
@@ -67,11 +86,84 @@ public class AnalyzerService {
         }
     }
 
+    public void backtest(
+            String instrumentKey,
+            String instrumentCode,
+            String fromDate,
+            String accessToken) {
+
+        if (scripAnomalies.containsKey(instrumentCode) &&
+                scripAnomalies.get(instrumentCode).size() > 1) {
+            log.info("Already raised for: {}", instrumentCode);
+            return;
+        }
+
+        List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
+                .get(instrumentCode)
+                .get("1-day");
+
+        Double volumeAverage = dayCandles.stream()
+                .mapToDouble(CandleData::getVolume)
+                .average()
+                .orElse(0.0);
+
+        log.info("analyzing for instrumentCode:{}, instrumentKey:{}",
+                instrumentCode, instrumentKey);
+
+        List<CandleData> candles = upStoxService.getHistoricalCandles(
+                instrumentKey,
+                instrumentCode,
+                "5",
+                "minutes",
+                getPreviousDate(fromDate),
+                getPreviousDate(fromDate),
+                accessToken);
+
+        int size = candles.size();
+        TDigestHelper digestHelper = T_DIGEST_HELPER_MAP.get(instrumentCode);
+
+        for (int i = size - 1; i >= 0; i--) {
+            CandleData currentCandle = candles.get(i);
+
+            digestHelper.add(currentCandle.getClose(), currentCandle.getVolume());
+
+            if (currentCandle.getClose() > currentCandle.getOpen()) {
+                double pricePercent = digestHelper.getPricePercentile(currentCandle.getClose());
+                double volumePercent = digestHelper.getVolumePercentile(currentCandle.getVolume());
+
+                if (pricePercent > 99 && volumePercent > 99) {
+
+                    Long sum = 0L;
+                    for (int j = 0; j <= i; j++) {
+                        sum += candles.get(j).getVolume();
+                    }
+
+                    AnomalyData anomaly = AnomalyData.builder()
+                            .instrumentCode(instrumentCode)
+                            .currentVolume(currentCandle.getVolume())
+                            .cumulativeVolume(sum)
+                            .volumeSMA(volumeAverage)
+                            .close(currentCandle.getClose())
+                            .build();
+
+                    log.info("Anomaly: {}", anomaly.toString());
+
+                    if (scripAnomalies.containsKey(instrumentCode)) {
+                        List<AnomalyData> anomalyList = scripAnomalies.get(instrumentCode);
+                        anomalyList.add(anomaly);
+                    } else {
+                        List<AnomalyData> anomalyDataList = new ArrayList<>();
+                        anomalyDataList.add(anomaly);
+                        scripAnomalies.put(instrumentCode, anomalyDataList);
+                    }
+                }
+            }
+        }
+    }
+
     public void analyze(
             String instrumentKey,
             String instrumentCode,
-            String interval,
-            String unit,
             String accessToken) {
 
         if (scripAnomalies.containsKey(instrumentCode) &&
@@ -86,8 +178,8 @@ public class AnalyzerService {
         List<CandleData> candles = upStoxService.getIntradayCandle(
                 instrumentKey,
                 instrumentCode,
-                interval,
-                unit,
+                "5",
+                "minutes",
                 accessToken);
 
         TDigestHelper digestHelper = T_DIGEST_HELPER_MAP.get(instrumentCode);
