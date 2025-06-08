@@ -17,13 +17,13 @@ public class StockController {
 
     @PostMapping("/api/v1/analyze")
     public String analyzeStocks(@RequestBody StockAnalyzerRequest request) {
-
         return "true";
     }
 
     @GetMapping("/api/v1/analyze")
     public String analyze() {
-
         return "true";
     }
+
+
 }

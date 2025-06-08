@@ -15,7 +15,7 @@ import java.util.Map;
 @Service
 @Log4j2
 public class TelegramService {
-    private static final String BOT_TOKEN = "demo"; // Put the Demo Bot Token
+    private static final String BOT_TOKEN = "demo";
     private static final String CHAT_ID = "@inv_grubber"; // Get the public channel ID
     private static final String TELEGRAM_API_URL = "https://api.telegram.org/bot";
 
