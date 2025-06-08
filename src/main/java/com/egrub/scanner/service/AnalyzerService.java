@@ -6,13 +6,14 @@ import com.egrub.scanner.model.TDigestHelper;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.egrub.scanner.utils.Constants.getPreviousDate;
-import static com.egrub.scanner.utils.Constants.getStartDate;
+import static com.egrub.scanner.utils.Constants.*;
 
 @Service
 @Log4j2
@@ -98,6 +99,8 @@ public class AnalyzerService {
             return;
         }
 
+        LocalDate startDate = LocalDate.parse(fromDate, DATE_FORMATTER);
+
         List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
                 .get(instrumentCode)
                 .get("1-day");
@@ -148,13 +151,55 @@ public class AnalyzerService {
 
                     log.info("Anomaly: {}", anomaly.toString());
 
+                    int workingDaysCount = 0;
+
+                    while (workingDaysCount < 5) {
+                        startDate = startDate.plusDays(1);
+                        DayOfWeek dow = startDate.getDayOfWeek();
+                        if (dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
+                            workingDaysCount++;
+                        }
+                    }
+
+                    List<CandleData> forwardCandles = upStoxService.getHistoricalCandles(
+                            instrumentKey,
+                            instrumentCode,
+                            "1",
+                            "days",
+                            startDate.format(DATE_FORMATTER),
+                            fromDate,
+                            accessToken);
+
                     if (scripAnomalies.containsKey(instrumentCode)) {
                         List<AnomalyData> anomalyList = scripAnomalies.get(instrumentCode);
                         anomalyList.add(anomaly);
+
+                        log.info("Second Candle: Profit or loss: {}, Low:{}",
+                                currentCandle.getClose() -
+                                        forwardCandles.stream()
+                                                .mapToDouble(CandleData::getClose)
+                                                .max()
+                                                .orElse(0.0),
+                                forwardCandles.stream()
+                                        .mapToDouble(CandleData::getClose)
+                                        .min()
+                                        .orElse(0.0));
+
                     } else {
                         List<AnomalyData> anomalyDataList = new ArrayList<>();
                         anomalyDataList.add(anomaly);
                         scripAnomalies.put(instrumentCode, anomalyDataList);
+
+                        log.info("First Candle: Profit or loss: {}, Low:{}",
+                                currentCandle.getClose() -
+                                        forwardCandles.stream()
+                                                .mapToDouble(CandleData::getClose)
+                                                .max()
+                                                .orElse(0.0),
+                                forwardCandles.stream()
+                                        .mapToDouble(CandleData::getClose)
+                                        .min()
+                                        .orElse(0.0));
                     }
                 }
             }

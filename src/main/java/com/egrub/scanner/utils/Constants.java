@@ -1,7 +1,9 @@
 package com.egrub.scanner.utils;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -11,7 +13,17 @@ public class Constants {
     public static final String INTRADAY_BASE_URL = "https://api.upstox.com/v3/historical-candle/intraday/";
     public static final String HISTORICAL_BASE_URL = "https://api.upstox.com/v3/historical-candle/";
 
-    static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    public static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public static long computeDelayUntilNext5MinuteMark() {
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        int nextMinute = ((now.getMinute() / 5) + 1) * 5;
+        LocalDateTime nextExecution = now.withMinute(0).withSecond(0).plusMinutes(nextMinute);
+        if (nextMinute >= 60) {
+            nextExecution = nextExecution.plusHours(1).withMinute(0);
+        }
+        return Duration.between(now, nextExecution).getSeconds();
+    }
 
     public static String getPreviousDate(String dateStr) {
         LocalDate date =
