@@ -1,0 +1,42 @@
+package com.egrub.scanner.utils;
+
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Constants {
+    public static final String INTRADAY_BASE_URL = "https://api.upstox.com/v3/historical-candle/intraday/";
+    public static final String HISTORICAL_BASE_URL = "https://api.upstox.com/v3/historical-candle/";
+
+    static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public static String getPreviousDate(String dateStr) {
+        LocalDate date =
+                LocalDate.parse(dateStr, DATE_FORMATTER);
+        do {
+            date = date.minus(1, ChronoUnit.DAYS);
+        } while (date.getDayOfWeek() == DayOfWeek.SUNDAY
+                || date.getDayOfWeek() == DayOfWeek.SATURDAY);
+
+        return date.format(DATE_FORMATTER);
+    }
+
+    public static String getStartDate(String dateStr, int lookBackPeriod) {
+        LocalDate date =
+                LocalDate.parse(dateStr, DATE_FORMATTER);
+
+        List<LocalDate> workingDays = new ArrayList<>();
+        while (workingDays.size() < lookBackPeriod - 1) {
+            date = date.minus(1, ChronoUnit.DAYS);
+            if (!(date.getDayOfWeek() == DayOfWeek.SATURDAY ||
+                    date.getDayOfWeek() == DayOfWeek.SUNDAY)) {
+                workingDays.add(date);
+            }
+        }
+
+        return workingDays.get(workingDays.size() - 1).format(DATE_FORMATTER);
+    }
+}
