@@ -3,20 +3,23 @@ package com.egrub.scanner.controller;
 import com.egrub.scanner.model.StockAnalyzerRequest;
 import com.egrub.scanner.service.AnalyzerService;
 import com.egrub.scanner.utils.Constants;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static com.egrub.scanner.utils.Constants.computeDelayUntilNext5MinuteMark;
+import static com.egrub.scanner.utils.Constants.*;
 
 @RestController
+@Log4j2
 public class StockController {
     private final AnalyzerService analyzerService;
 
@@ -28,28 +31,38 @@ public class StockController {
     }
 
     @PostMapping("/api/v1/backtest")
-    public String backtest(@RequestBody StockAnalyzerRequest request) {
+    public String backtest(@RequestBody StockAnalyzerRequest request) throws IOException {
 
-        request.getScripMap()
-                .forEach((key, value) -> {
+
+        VALID_INSTRUMENT
+                .forEach(instrument -> {
                     analyzerService.populateDigests(
-                            key,
-                            value,
+                            instrument.getInstrumentKey(),
+                            instrument.getSymbol(),
                             request.getStartDate(),
                             request.getAccessToken(),
                             request.getLookBackPeriod()
                     );
+
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 });
 
+        rungc();
 
-        request.getScripMap()
-                .forEach((key, value) -> {
+        VALID_INSTRUMENT
+                .forEach(instrument -> {
                     analyzerService.backtest(
-                            key,
-                            value,
+                            instrument.getInstrumentKey(),
+                            instrument.getSymbol(),
                             request.getStartDate(),
                             request.getAccessToken());
                 });
+
+        analyzerService.writeToFile();
 
         return "true";
     }
@@ -57,11 +70,13 @@ public class StockController {
     @PostMapping("/api/v1/analyze")
     public String analyzeStocks(@RequestBody StockAnalyzerRequest request) {
 
-        request.getScripMap()
-                .forEach((key, value) -> {
+        log.info("Instrument Size:{}", VALID_INSTRUMENT.size());
+
+        VALID_INSTRUMENT
+                .forEach(instrument -> {
                     analyzerService.populateDigests(
-                            key,
-                            value,
+                            instrument.getInstrumentKey(),
+                            instrument.getSymbol(),
                             LocalDate.now().format(Constants.DATE_FORMATTER),
                             request.getAccessToken(),
                             request.getLookBackPeriod()
@@ -72,13 +87,17 @@ public class StockController {
             return "Task is already scheduled.";
         }
 
+        // rungc();
+
         Runnable task = () -> {
-            request.getScripMap()
-                    .forEach((key, value) -> {
+            VALID_INSTRUMENT
+                    .forEach(instrument -> {
+                        log.info("Analyzing for instrument:{}", instrument.getSymbol());
                         analyzerService.analyze(
-                                key,
-                                value,
-                                request.getAccessToken());
+                                instrument.getInstrumentKey(),
+                                instrument.getSymbol(),
+                                request.getAccessToken()
+                        );
                     });
         };
 

@@ -20,8 +20,6 @@ public class NotifyController {
 
     @GetMapping("/api/notify")
     public String sendAlert() {
-        this.emailService.alert();
-        this.telegramService.sendMessage();
         return "true";
     }
 

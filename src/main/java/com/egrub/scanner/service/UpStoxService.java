@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -43,24 +44,29 @@ public class UpStoxService {
 
         log.info("processing for code: {}", instrumentCode);
 
-        String url = UriComponentsBuilder
-                .fromHttpUrl(Constants.HISTORICAL_BASE_URL)
-                .path("/{instrument_key}/{unit}/{interval}/{to_date}/{from_date}")
-                .buildAndExpand(instrumentKey, unit, interval, toDate, fromDate)
-                .toUriString();
+        try {
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(Constants.HISTORICAL_BASE_URL)
+                    .path("/{instrument_key}/{unit}/{interval}/{to_date}/{from_date}")
+                    .buildAndExpand(instrumentKey, unit, interval, toDate, fromDate)
+                    .toUriString();
 
-        HTTP_HEADERS.setBearerAuth(accessToken);
-        HttpEntity<String> responseEntity = new HttpEntity<>(HTTP_HEADERS);
+            HTTP_HEADERS.setBearerAuth(accessToken);
+            HttpEntity<String> responseEntity = new HttpEntity<>(HTTP_HEADERS);
 
-        ResponseEntity<String> response = this.restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                responseEntity,
-                String.class
-        );
+            ResponseEntity<String> response = this.restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    responseEntity,
+                    String.class
+            );
 
-        HistoricalData historicalData = parseResponse(response.getBody());
-        return historicalData.getData().getParsedCandles();
+            HistoricalData historicalData = parseResponse(response.getBody());
+            return historicalData.getData().getParsedCandles();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return Collections.EMPTY_LIST;
     }
 
     public List<CandleData> getIntradayCandle(

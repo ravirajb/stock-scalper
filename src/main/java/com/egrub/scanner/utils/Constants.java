@@ -1,5 +1,8 @@
 package com.egrub.scanner.utils;
 
+import com.egrub.scanner.model.AnomalyData;
+import com.egrub.scanner.model.upstox.Instrument;
+
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -7,13 +10,18 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Constants {
     public static final String INTRADAY_BASE_URL = "https://api.upstox.com/v3/historical-candle/intraday/";
     public static final String HISTORICAL_BASE_URL = "https://api.upstox.com/v3/historical-candle/";
 
     public static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public static final List<Instrument> VALID_INSTRUMENT = new ArrayList<>();
+    public static final Map<String, List<AnomalyData>> ANOMALY_MAP = new HashMap<>();
 
     public static long computeDelayUntilNext5MinuteMark() {
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
@@ -50,5 +58,20 @@ public class Constants {
         }
 
         return workingDays.get(workingDays.size() - 1).format(DATE_FORMATTER);
+    }
+
+    public static void rungc() {
+        Runtime runtime = Runtime.getRuntime();
+
+        // Run garbage collector
+        runtime.gc();
+
+        long totalMemory = runtime.totalMemory(); // total memory in JVM
+        long freeMemory = runtime.freeMemory();   // free memory in JVM
+        long usedMemory = totalMemory - freeMemory;
+
+        System.out.println("Total Memory: " + (totalMemory / (1024 * 1024)) + " MB");
+        System.out.println("Free Memory: " + (freeMemory / (1024 * 1024)) + " MB");
+        System.out.println("Used Memory: " + (usedMemory / (1024 * 1024)) + " MB");
     }
 }

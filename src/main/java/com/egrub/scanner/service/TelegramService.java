@@ -1,6 +1,7 @@
 package com.egrub.scanner.service;
 
 
+import com.egrub.scanner.model.AnomalyData;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,12 +26,12 @@ public class TelegramService {
         this.restTemplate = restTemplate;
     }
 
-    public void sendMessage() {
+    public void sendMessage(AnomalyData anomalyData, String anomalyMessage) {
         String url = TELEGRAM_API_URL + BOT_TOKEN + "/sendMessage";
 
         Map<String, String> params = new HashMap<>();
         params.put("chat_id", CHAT_ID);
-        params.put("text", "First Message");
+        params.put("text", anomalyMessage + "\n" + anomalyData.toString());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

@@ -3,9 +3,14 @@ package com.egrub.scanner.service;
 import com.egrub.scanner.model.AnomalyData;
 import com.egrub.scanner.model.CandleData;
 import com.egrub.scanner.model.TDigestHelper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.IOException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -20,6 +25,7 @@ import static com.egrub.scanner.utils.Constants.*;
 public class AnalyzerService {
     private final EmailService emailService;
     private final UpStoxService upStoxService;
+    private final TelegramService telegramService;
 
     private final static Map<String, TDigestHelper> T_DIGEST_HELPER_MAP
             = new HashMap<>();
@@ -36,9 +42,11 @@ public class AnalyzerService {
             "240", "minutes");
 
     public AnalyzerService(EmailService emailService,
-                           UpStoxService upStoxService) {
+                           UpStoxService upStoxService,
+                           TelegramService telegramService) {
         this.emailService = emailService;
         this.upStoxService = upStoxService;
+        this.telegramService = telegramService;
     }
 
     public void populateDigests(String instrumentKey,
@@ -93,8 +101,8 @@ public class AnalyzerService {
             String fromDate,
             String accessToken) {
 
-        if (scripAnomalies.containsKey(instrumentCode) &&
-                scripAnomalies.get(instrumentCode).size() > 1) {
+        if (ANOMALY_MAP.containsKey(instrumentCode) &&
+                ANOMALY_MAP.get(instrumentCode).size() > 1) {
             log.info("Already raised for: {}", instrumentCode);
             return;
         }
@@ -103,7 +111,7 @@ public class AnalyzerService {
 
         List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
                 .get(instrumentCode)
-                .get("1-day");
+                .get("1-days");
 
         Double volumeAverage = dayCandles.stream()
                 .mapToDouble(CandleData::getVolume)
@@ -116,10 +124,10 @@ public class AnalyzerService {
         List<CandleData> candles = upStoxService.getHistoricalCandles(
                 instrumentKey,
                 instrumentCode,
-                "5",
+                "30",
                 "minutes",
-                getPreviousDate(fromDate),
-                getPreviousDate(fromDate),
+                fromDate,
+                fromDate,
                 accessToken);
 
         int size = candles.size();
@@ -144,6 +152,7 @@ public class AnalyzerService {
                     AnomalyData anomaly = AnomalyData.builder()
                             .instrumentCode(instrumentCode)
                             .currentVolume(currentCandle.getVolume())
+                            .timeStamp(currentCandle.getTimestamp())
                             .cumulativeVolume(sum)
                             .volumeSMA(volumeAverage)
                             .close(currentCandle.getClose())
@@ -170,9 +179,11 @@ public class AnalyzerService {
                             fromDate,
                             accessToken);
 
-                    if (scripAnomalies.containsKey(instrumentCode)) {
-                        List<AnomalyData> anomalyList = scripAnomalies.get(instrumentCode);
+                    if (ANOMALY_MAP.containsKey(instrumentCode)) {
+                        List<AnomalyData> anomalyList = ANOMALY_MAP.get(instrumentCode);
                         anomalyList.add(anomaly);
+
+                        ANOMALY_MAP.put(instrumentCode, anomalyList);
 
                         log.info("Second Candle: Profit or loss: {}, Low:{}",
                                 currentCandle.getClose() -
@@ -185,10 +196,14 @@ public class AnalyzerService {
                                         .min()
                                         .orElse(0.0));
 
+                        // this.telegramService.sendMessage(anomaly);
                     } else {
                         List<AnomalyData> anomalyDataList = new ArrayList<>();
                         anomalyDataList.add(anomaly);
-                        scripAnomalies.put(instrumentCode, anomalyDataList);
+
+                        ANOMALY_MAP.put(instrumentCode, anomalyDataList);
+
+                        // this.telegramService.sendMessage(anomaly);
 
                         log.info("First Candle: Profit or loss: {}, Low:{}",
                                 currentCandle.getClose() -
@@ -206,54 +221,91 @@ public class AnalyzerService {
         }
     }
 
+    public void writeToFile() throws IOException {
+
+        List<AnomalyData> flatList = new ArrayList<>();
+        for (Map.Entry<String, List<AnomalyData>> entry : ANOMALY_MAP.entrySet()) {
+            flatList.addAll(entry.getValue());
+        }
+
+        CsvMapper mapper = new CsvMapper();
+        CsvSchema schema = mapper.schemaFor(AnomalyData.class).withHeader();
+
+        // Write to file
+        ObjectWriter writer = mapper.writer(schema);
+        writer.writeValue(new File("anomalies.csv"), flatList);
+        return;
+    }
+
     public void analyze(
             String instrumentKey,
             String instrumentCode,
             String accessToken) {
 
-        if (scripAnomalies.containsKey(instrumentCode) &&
-                scripAnomalies.get(instrumentCode).size() > 1) {
+        if (ANOMALY_MAP.containsKey(instrumentCode) &&
+                ANOMALY_MAP.get(instrumentCode).size() > 1) {
             log.info("Already raised for: {}", instrumentCode);
             return;
         }
 
-        log.info("analyzing for instrumentCode:{}, instrumentKey:{}",
-                instrumentCode, instrumentKey);
+        if (STOCK_HISTORICAL_DATA.containsKey(instrumentCode)) {
+            log.info("analyzing for instrumentCode:{}, instrumentKey:{}",
+                    instrumentCode, instrumentKey);
 
-        List<CandleData> candles = upStoxService.getIntradayCandle(
-                instrumentKey,
-                instrumentCode,
-                "5",
-                "minutes",
-                accessToken);
+            List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
+                    .get(instrumentCode)
+                    .get("1-days");
 
-        TDigestHelper digestHelper = T_DIGEST_HELPER_MAP.get(instrumentCode);
+            Double volumeAverage = dayCandles.stream()
+                    .mapToDouble(CandleData::getVolume)
+                    .average()
+                    .orElse(0.0);
 
-        CandleData currentCandle = candles.get(0);
+            List<CandleData> candles = upStoxService.getIntradayCandle(
+                    instrumentKey,
+                    instrumentCode,
+                    "5",
+                    "minutes",
+                    accessToken);
 
-        digestHelper.add(currentCandle.getClose(), currentCandle.getVolume());
+            TDigestHelper digestHelper = T_DIGEST_HELPER_MAP.get(instrumentCode);
+            if (candles.size() > 0) {
+                CandleData currentCandle = candles.get(0);
 
-        if (currentCandle.getClose() > currentCandle.getOpen()) {
-            double pricePercent = digestHelper.getPricePercentile(currentCandle.getClose());
-            double volumePercent = digestHelper.getVolumePercentile(currentCandle.getVolume());
+                Long sum = candles.stream().mapToLong(CandleData::getVolume)
+                        .sum();
 
-            if (pricePercent > 99 && volumePercent > 99) {
-                log.info("Anomaly Detected for code: {}", instrumentCode);
-                AnomalyData anomaly = AnomalyData.builder()
-                        .instrumentCode(instrumentCode)
-                        .currentVolume(currentCandle.getVolume())
-                        .close(currentCandle.getClose())
-                        .build();
+                digestHelper.add(currentCandle.getClose(), currentCandle.getVolume());
 
-                if (scripAnomalies.containsKey(instrumentCode)) {
-                    List<AnomalyData> anomalyList = scripAnomalies.get(instrumentCode);
-                    anomalyList.add(anomaly);
-                } else {
-                    List<AnomalyData> anomalyDataList = new ArrayList<>();
-                    anomalyDataList.add(anomaly);
-                    scripAnomalies.put(instrumentCode, anomalyDataList);
+
+                double pricePercent = digestHelper.getPricePercentile(currentCandle.getClose());
+                double volumePercent = digestHelper.getVolumePercentile(currentCandle.getVolume());
+
+                if (pricePercent > 99 && volumePercent > 99) {
+                    log.info("Anomaly Detected for code: {}", instrumentCode);
+
+                    AnomalyData anomaly = AnomalyData.builder()
+                            .instrumentCode(instrumentCode)
+                            .currentVolume(currentCandle.getVolume())
+                            .timeStamp(currentCandle.getTimestamp())
+                            .cumulativeVolume(sum)
+                            .volumeSMA(volumeAverage)
+                            .close(currentCandle.getClose())
+                            .build();
+
+                    if (ANOMALY_MAP.containsKey(instrumentCode)) {
+                        List<AnomalyData> anomalyList = ANOMALY_MAP.get(instrumentCode);
+                        anomalyList.add(anomaly);
+                        this.telegramService.sendMessage(anomaly, "5Min second anomaly");
+                    } else {
+                        this.telegramService.sendMessage(anomaly, "5Min first anomaly");
+                        List<AnomalyData> anomalyDataList = new ArrayList<>();
+                        anomalyDataList.add(anomaly);
+                        ANOMALY_MAP.put(instrumentCode, anomalyDataList);
+                    }
                 }
             }
+
         }
     }
 }

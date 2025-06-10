@@ -15,7 +15,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -34,32 +33,14 @@ public class EmailService {
         this.client = new MailjetClient(options);
     }
 
-    public void alert() {
+    public void alert(AnomalyData anomalyData) {
         try {
-
-            List<AnomalyData> anomalies = Arrays.asList(
-                    AnomalyData.builder()
-                            .instrumentCode("ABC")
-                            .timeStamp("9:20")
-                            .close(99d)
-                            .build(),
-                    AnomalyData.builder()
-                            .instrumentCode("DEF")
-                            .timeStamp("9:70")
-                            .close(99d)
-                            .build(),
-                    AnomalyData.builder()
-                            .instrumentCode("GHI")
-                            .timeStamp("9:50")
-                            .close(99d)
-                            .build()
-            );
 
             ReportData reportData = new ReportData(
                     "Anomaly Report",
                     "Anomaly report",
-                    anomalies,
-                    anomalies.size()
+                    List.of(anomalyData),
+                    1
             );
 
             // Generate HTML from the POJO
