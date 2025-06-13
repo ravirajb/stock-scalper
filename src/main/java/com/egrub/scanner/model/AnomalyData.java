@@ -14,4 +14,5 @@ public class AnomalyData {
     private Long currentVolume;
     private Long cumulativeVolume;
     private Double volumeSMA;
+    private double pivot, r1, s1, r2, s2;
 }

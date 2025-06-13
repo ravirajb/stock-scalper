@@ -11,14 +11,13 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static com.egrub.scanner.utils.Constants.*;
+import static com.egrub.scanner.utils.TechnicalIndicators.calculatePivotPoints;
 
 @Service
 @Log4j2
@@ -31,6 +30,9 @@ public class AnalyzerService {
             = new HashMap<>();
 
     private final static Map<String, List<AnomalyData>> scripAnomalies = new HashMap<>();
+
+    private final static Map<String, AnomalyData> LATEST_ANOMALY = new HashMap<>();
+    private final static Map<String, Integer> ANOMALY_CONSOLIDATION_COUNT = new HashMap<>();
 
     private final static Map<String, Map<String, List<CandleData>>> STOCK_HISTORICAL_DATA =
             new HashMap<>();
@@ -101,13 +103,14 @@ public class AnalyzerService {
             String fromDate,
             String accessToken) {
 
-        if (ANOMALY_MAP.containsKey(instrumentCode) &&
+        /*if (ANOMALY_MAP.containsKey(instrumentCode) &&
                 ANOMALY_MAP.get(instrumentCode).size() > 1) {
             log.info("Already raised for: {}", instrumentCode);
             return;
         }
 
         LocalDate startDate = LocalDate.parse(fromDate, DATE_FORMATTER);
+         */
 
         List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
                 .get(instrumentCode)
@@ -118,13 +121,15 @@ public class AnalyzerService {
                 .average()
                 .orElse(0.0);
 
+        double[] pivotPoints = calculatePivotPoints(dayCandles.get(0));
+
         log.info("analyzing for instrumentCode:{}, instrumentKey:{}",
                 instrumentCode, instrumentKey);
 
         List<CandleData> candles = upStoxService.getHistoricalCandles(
                 instrumentKey,
                 instrumentCode,
-                "30",
+                "5",
                 "minutes",
                 fromDate,
                 fromDate,
@@ -137,6 +142,15 @@ public class AnalyzerService {
             CandleData currentCandle = candles.get(i);
 
             digestHelper.add(currentCandle.getClose(), currentCandle.getVolume());
+
+            if (ANOMALY_MAP.containsKey(instrumentCode) &&
+                    ANOMALY_MAP.get(instrumentCode).size() == 1) {
+                AnomalyData existingAnomaly = ANOMALY_MAP.get(instrumentCode).get(0);
+
+
+            } else {
+
+            }
 
             if (currentCandle.getClose() > currentCandle.getOpen()) {
                 double pricePercent = digestHelper.getPricePercentile(currentCandle.getClose());
@@ -156,11 +170,16 @@ public class AnalyzerService {
                             .cumulativeVolume(sum)
                             .volumeSMA(volumeAverage)
                             .close(currentCandle.getClose())
+                            .pivot(pivotPoints[0])
+                            .r1(pivotPoints[1])
+                            .s1(pivotPoints[2])
+                            .r2(pivotPoints[3])
+                            .s2(pivotPoints[4])
                             .build();
 
                     log.info("Anomaly: {}", anomaly.toString());
 
-                    int workingDaysCount = 0;
+                    /*int workingDaysCount = 0;
 
                     while (workingDaysCount < 5) {
                         startDate = startDate.plusDays(1);
@@ -178,23 +197,13 @@ public class AnalyzerService {
                             startDate.format(DATE_FORMATTER),
                             fromDate,
                             accessToken);
+                     */
 
                     if (ANOMALY_MAP.containsKey(instrumentCode)) {
                         List<AnomalyData> anomalyList = ANOMALY_MAP.get(instrumentCode);
                         anomalyList.add(anomaly);
 
                         ANOMALY_MAP.put(instrumentCode, anomalyList);
-
-                        log.info("Second Candle: Profit or loss: {}, Low:{}",
-                                currentCandle.getClose() -
-                                        forwardCandles.stream()
-                                                .mapToDouble(CandleData::getClose)
-                                                .max()
-                                                .orElse(0.0),
-                                forwardCandles.stream()
-                                        .mapToDouble(CandleData::getClose)
-                                        .min()
-                                        .orElse(0.0));
 
                         // this.telegramService.sendMessage(anomaly);
                     } else {
@@ -204,17 +213,6 @@ public class AnalyzerService {
                         ANOMALY_MAP.put(instrumentCode, anomalyDataList);
 
                         // this.telegramService.sendMessage(anomaly);
-
-                        log.info("First Candle: Profit or loss: {}, Low:{}",
-                                currentCandle.getClose() -
-                                        forwardCandles.stream()
-                                                .mapToDouble(CandleData::getClose)
-                                                .max()
-                                                .orElse(0.0),
-                                forwardCandles.stream()
-                                        .mapToDouble(CandleData::getClose)
-                                        .min()
-                                        .orElse(0.0));
                     }
                 }
             }
@@ -241,71 +239,117 @@ public class AnalyzerService {
             String instrumentKey,
             String instrumentCode,
             String accessToken) {
+        try {
 
-        if (ANOMALY_MAP.containsKey(instrumentCode) &&
-                ANOMALY_MAP.get(instrumentCode).size() > 1) {
-            log.info("Already raised for: {}", instrumentCode);
-            return;
-        }
+            if (STOCK_HISTORICAL_DATA.containsKey(instrumentCode)) {
+                log.info("analyzing for instrumentCode:{}, instrumentKey:{}",
+                        instrumentCode, instrumentKey);
 
-        if (STOCK_HISTORICAL_DATA.containsKey(instrumentCode)) {
-            log.info("analyzing for instrumentCode:{}, instrumentKey:{}",
-                    instrumentCode, instrumentKey);
+                List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
+                        .get(instrumentCode)
+                        .get("1-days");
 
-            List<CandleData> dayCandles = STOCK_HISTORICAL_DATA
-                    .get(instrumentCode)
-                    .get("1-days");
+                double[] pivotPoints = calculatePivotPoints(dayCandles.get(0));
 
-            Double volumeAverage = dayCandles.stream()
-                    .mapToDouble(CandleData::getVolume)
-                    .average()
-                    .orElse(0.0);
+                Double volumeAverage = dayCandles.stream()
+                        .mapToDouble(CandleData::getVolume)
+                        .average()
+                        .orElse(0.0);
 
-            List<CandleData> candles = upStoxService.getIntradayCandle(
-                    instrumentKey,
-                    instrumentCode,
-                    "5",
-                    "minutes",
-                    accessToken);
+                List<CandleData> candles = upStoxService.getIntradayCandle(
+                        instrumentKey,
+                        instrumentCode,
+                        "5",
+                        "minutes",
+                        accessToken);
 
-            TDigestHelper digestHelper = T_DIGEST_HELPER_MAP.get(instrumentCode);
-            if (candles.size() > 0) {
-                CandleData currentCandle = candles.get(0);
+                TDigestHelper digestHelper = T_DIGEST_HELPER_MAP.get(instrumentCode);
+                int consolidationCount = ANOMALY_CONSOLIDATION_COUNT
+                        .getOrDefault(instrumentCode, 0);
 
-                Long sum = candles.stream().mapToLong(CandleData::getVolume)
-                        .sum();
+                if (candles.size() > 0) {
+                    CandleData currentCandle = candles.get(0);
 
-                digestHelper.add(currentCandle.getClose(), currentCandle.getVolume());
+                    Long sum = candles.stream().mapToLong(CandleData::getVolume)
+                            .sum();
+
+                    digestHelper.add(currentCandle.getClose(), currentCandle.getVolume());
 
 
-                double pricePercent = digestHelper.getPricePercentile(currentCandle.getClose());
-                double volumePercent = digestHelper.getVolumePercentile(currentCandle.getVolume());
+                    double pricePercent = digestHelper.getPricePercentile(currentCandle.getClose());
+                    double volumePercent = digestHelper.getVolumePercentile(currentCandle.getVolume());
+                    AnomalyData latestAnomaly = LATEST_ANOMALY.get(instrumentCode);
 
-                if (pricePercent > 99 && volumePercent > 99) {
-                    log.info("Anomaly Detected for code: {}", instrumentCode);
+                    if (LATEST_ANOMALY.containsKey(instrumentCode)) {
 
-                    AnomalyData anomaly = AnomalyData.builder()
-                            .instrumentCode(instrumentCode)
-                            .currentVolume(currentCandle.getVolume())
-                            .timeStamp(currentCandle.getTimestamp())
-                            .cumulativeVolume(sum)
-                            .volumeSMA(volumeAverage)
-                            .close(currentCandle.getClose())
-                            .build();
+                        Long anomalyVolume = latestAnomaly.getCurrentVolume();
+                        Double close = latestAnomaly.getClose();
+                        if ((pricePercent < 99 || volumePercent < 99) ||
+                                currentCandle.getClose() < currentCandle.getOpen()
+                        ) {
+                            double percentChange = (Math.abs(currentCandle.getClose()
+                                    - currentCandle.getOpen()) / currentCandle.getOpen()) * 100;
 
-                    if (ANOMALY_MAP.containsKey(instrumentCode)) {
-                        List<AnomalyData> anomalyList = ANOMALY_MAP.get(instrumentCode);
-                        anomalyList.add(anomaly);
-                        this.telegramService.sendMessage(anomaly, "5Min second anomaly");
-                    } else {
-                        this.telegramService.sendMessage(anomaly, "5Min first anomaly");
-                        List<AnomalyData> anomalyDataList = new ArrayList<>();
-                        anomalyDataList.add(anomaly);
-                        ANOMALY_MAP.put(instrumentCode, anomalyDataList);
+                            if (percentChange <= 1) {
+                                consolidationCount++;
+                                ANOMALY_CONSOLIDATION_COUNT.put(instrumentCode, consolidationCount);
+                            }
+
+                            if ((currentCandle.getVolume() / anomalyVolume) * 100 < 30 &&
+                                    consolidationCount > 3) {
+                                this.telegramService.sendMessage(latestAnomaly,
+                                        "Conslidating - check for this stock");
+                            }
+
+                        }
+                    }
+
+
+                    if (pricePercent > 99 && volumePercent > 99) {
+                        log.info("Anomaly Detected for code: {}", instrumentCode);
+
+                        AnomalyData anomaly = AnomalyData.builder()
+                                .instrumentCode(instrumentCode)
+                                .currentVolume(currentCandle.getVolume())
+                                .timeStamp(currentCandle.getTimestamp())
+                                .cumulativeVolume(sum)
+                                .volumeSMA(volumeAverage)
+                                .close(currentCandle.getClose())
+                                .pivot(pivotPoints[0])
+                                .r1(pivotPoints[1])
+                                .s1(pivotPoints[2])
+                                .r2(pivotPoints[3])
+                                .s2(pivotPoints[4])
+                                .build();
+
+                        LATEST_ANOMALY.put(instrumentCode, anomaly);
+
+                        if (ANOMALY_MAP.containsKey(instrumentCode)) {
+                            List<AnomalyData> anomalyList = ANOMALY_MAP.get(instrumentCode);
+                            anomalyList.add(anomaly);
+                            if (consolidationCount > 3
+                                    && currentCandle.getClose() > latestAnomaly.getClose()) {
+                                this.telegramService.sendMessage(anomaly,
+                                        "Not subsequent anomalies - " +
+                                                "consolidation of > " + consolidationCount + "happening, between anomalies");
+                            } else {
+                                this.telegramService.sendMessage(anomaly,
+                                        "5Min " + anomalyList.size() + " anomaly");
+                            }
+
+                        } else {
+                            this.telegramService.sendMessage(anomaly,
+                                    "5Min first anomaly");
+                            List<AnomalyData> anomalyDataList = new ArrayList<>();
+                            anomalyDataList.add(anomaly);
+                            ANOMALY_MAP.put(instrumentCode, anomalyDataList);
+                        }
                     }
                 }
-            }
 
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
     }
 }
