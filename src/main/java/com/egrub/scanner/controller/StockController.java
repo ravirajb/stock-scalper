@@ -33,16 +33,17 @@ public class StockController {
     @PostMapping("/api/v1/backtest")
     public String backtest(@RequestBody StockAnalyzerRequest request) throws IOException {
 
-
         VALID_INSTRUMENT
                 .forEach(instrument -> {
-                    analyzerService.populateDigests(
-                            instrument.getInstrumentKey(),
-                            instrument.getSymbol(),
-                            request.getStartDate(),
-                            request.getAccessToken(),
-                            request.getLookBackPeriod()
-                    );
+                    if (instrument.getSymbol().equalsIgnoreCase("SUPRAJIT")) {
+                        analyzerService.populateDigests(
+                                instrument.getInstrumentKey(),
+                                instrument.getSymbol(),
+                                request.getStartDate(),
+                                request.getAccessToken(),
+                                request.getLookBackPeriod()
+                        );
+                    }
 
                     try {
                         Thread.sleep(100);
@@ -55,14 +56,16 @@ public class StockController {
 
         VALID_INSTRUMENT
                 .forEach(instrument -> {
-                    analyzerService.backtest(
-                            instrument.getInstrumentKey(),
-                            instrument.getSymbol(),
-                            request.getStartDate(),
-                            request.getAccessToken());
+                    if (instrument.getSymbol().equalsIgnoreCase("SUPRAJIT")) {
+                        analyzerService.backtest(
+                                instrument.getInstrumentKey(),
+                                instrument.getSymbol(),
+                                request.getStartDate(),
+                                request.getAccessToken());
+                    }
                 });
 
-        analyzerService.writeToFile();
+        // analyzerService.writeToFile();
 
         return "true";
     }

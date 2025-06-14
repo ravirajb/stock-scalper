@@ -42,7 +42,8 @@ public class UpStoxService {
             String fromDate,
             String accessToken) {
 
-        log.info("processing for code: {}", instrumentCode);
+        log.info("processing for code: {}, interval: {}, unit: {}",
+                instrumentCode, interval, unit);
 
         try {
             String url = UriComponentsBuilder
@@ -76,25 +77,30 @@ public class UpStoxService {
             String unit,
             String accessToken) {
 
-        log.info("processing for code: {}", instrumentCode);
+        try {
+            log.info("processing for code: {}", instrumentCode);
 
-        String url = UriComponentsBuilder
-                .fromHttpUrl(Constants.INTRADAY_BASE_URL)
-                .path("/{instrument_key}/{unit}/{interval}")
-                .buildAndExpand(instrumentKey, unit, interval)
-                .toUriString();
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(Constants.INTRADAY_BASE_URL)
+                    .path("/{instrument_key}/{unit}/{interval}")
+                    .buildAndExpand(instrumentKey, unit, interval)
+                    .toUriString();
 
-        HTTP_HEADERS.setBearerAuth(accessToken);
-        HttpEntity<String> responseEntity = new HttpEntity<>(HTTP_HEADERS);
+            HTTP_HEADERS.setBearerAuth(accessToken);
+            HttpEntity<String> responseEntity = new HttpEntity<>(HTTP_HEADERS);
 
-        ResponseEntity<String> response = this.restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                responseEntity,
-                String.class
-        );
-        HistoricalData historicalData = parseResponse(response.getBody());
-        return historicalData.getData().getParsedCandles();
+            ResponseEntity<String> response = this.restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    responseEntity,
+                    String.class
+            );
+            HistoricalData historicalData = parseResponse(response.getBody());
+            return historicalData.getData().getParsedCandles();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return Collections.EMPTY_LIST;
     }
 
     private HistoricalData parseResponse(String body) {
