@@ -3,6 +3,8 @@ package com.egrub.scanner.model;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class AnomalyData {
@@ -18,12 +20,13 @@ public class AnomalyData {
     @Override
     public String toString() {
         return "AnomalyData {\n" +
-                "  timeStamp: " + timeStamp + "\n" +
-                "  instrumentCode: " + instrumentCode + "\n" +
+                "  <b> timeStamp: " + timeStamp + "</b> \n" +
+                " <b> instrumentCode: " + instrumentCode + "</b>\n" +
                 "  close: " + close + "\n" +
                 "  currentVolume: " + currentVolume + "\n" +
                 "  cumulativeVolume: " + cumulativeVolume + "\n" +
                 "  volumeSMA: " + volumeSMA + "\n" +
+                "  volumeRatio: " + volumeRatio + "\n" +
                 "  pivot: " + pivot + "\n" +
                 "  r1: " + r1 + "\n" +
                 "  s1: " + s1 + "\n" +

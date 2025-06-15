@@ -33,37 +33,26 @@ public class StockController {
     @PostMapping("/api/v1/backtest")
     public String backtest(@RequestBody StockAnalyzerRequest request) throws IOException {
 
+
         VALID_INSTRUMENT
                 .forEach(instrument -> {
-                    if (instrument.getSymbol().equalsIgnoreCase("SUPRAJIT")) {
-                        analyzerService.populateDigests(
-                                instrument.getInstrumentKey(),
-                                instrument.getSymbol(),
-                                request.getStartDate(),
-                                request.getAccessToken(),
-                                request.getLookBackPeriod()
-                        );
-                    }
+                    analyzerService.populateDigests(
+                            instrument.getInstrumentKey(),
+                            instrument.getSymbol(),
+                            request.getStartDate(),
+                            request.getAccessToken(),
+                            request.getLookBackPeriod()
+                    );
 
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+                    analyzerService.backtest(
+                            instrument.getInstrumentKey(),
+                            instrument.getSymbol(),
+                            request.getStartDate(),
+                            request.getAccessToken());
+
                 });
 
         rungc();
-
-        VALID_INSTRUMENT
-                .forEach(instrument -> {
-                    if (instrument.getSymbol().equalsIgnoreCase("SUPRAJIT")) {
-                        analyzerService.backtest(
-                                instrument.getInstrumentKey(),
-                                instrument.getSymbol(),
-                                request.getStartDate(),
-                                request.getAccessToken());
-                    }
-                });
 
         // analyzerService.writeToFile();
 
@@ -90,7 +79,7 @@ public class StockController {
             return "Task is already scheduled.";
         }
 
-        // rungc();
+        rungc();
 
         Runnable task = () -> {
             VALID_INSTRUMENT

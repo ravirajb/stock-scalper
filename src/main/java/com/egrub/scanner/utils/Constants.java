@@ -1,12 +1,10 @@
 package com.egrub.scanner.utils;
 
 import com.egrub.scanner.model.AnomalyData;
+import com.egrub.scanner.model.CandleData;
 import com.egrub.scanner.model.upstox.Instrument;
 
-import java.time.DayOfWeek;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -22,6 +20,48 @@ public class Constants {
 
     public static final List<Instrument> VALID_INSTRUMENT = new ArrayList<>();
     public static final Map<String, List<AnomalyData>> ANOMALY_MAP = new HashMap<>();
+
+    public static List<CandleData> getCandlesPriorTo(List<CandleData> candles, String timestampStr) {
+        OffsetDateTime targetTime = OffsetDateTime.parse(timestampStr);
+
+        List<CandleData> result = new ArrayList<>();
+
+        for (CandleData candle : candles) {
+            OffsetDateTime candleTime = OffsetDateTime.parse(candle.getTimestamp());
+
+            // candleTime <= targetTime
+            if (!candleTime.isAfter(targetTime)) {
+                result.add(candle);
+            }
+        }
+
+        return result;
+    }
+
+    public static boolean isPriceInBoxWithDecreasingVolume(List<CandleData> candles, int days) {
+        if (candles.size() < days) return false;
+
+        List<CandleData> subList = candles.subList(0, days); // Most recent N days
+
+        // Check volume strictly decreasing
+        /*for (int i = 0; i < subList.size() - 1; i++) {
+            if (subList.get(i).getVolume() >= subList.get(i + 1).getVolume()) {
+                return false;
+            }
+        }*/
+
+        // Check price in box: all high-low ranges are within 5% of the max range
+        double maxRange = subList.stream()
+                .mapToDouble(c -> c.getClose() - c.getOpen())
+                .max()
+                .orElse(0.0);
+
+        return subList.stream()
+                .allMatch(c -> {
+                    double range = c.getClose() - c.getOpen();
+                    return Math.abs(range - maxRange) / maxRange <= 0.03; // within 5% deviation
+                });
+    }
 
     public static long computeDelayUntilNext5MinuteMark() {
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
