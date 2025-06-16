@@ -2,7 +2,9 @@ package com.egrub.scanner.controller;
 
 import com.egrub.scanner.model.StockAnalyzerRequest;
 import com.egrub.scanner.service.AnalyzerService;
+import com.egrub.scanner.service.UpstoxWSService;
 import com.egrub.scanner.utils.Constants;
+import com.upstox.ApiException;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,12 +24,21 @@ import static com.egrub.scanner.utils.Constants.*;
 @Log4j2
 public class StockController {
     private final AnalyzerService analyzerService;
+    private final UpstoxWSService upstoxWSService;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> scheduledTask;
 
-    public StockController(AnalyzerService analyzerService) {
+    public StockController(AnalyzerService analyzerService,
+                           UpstoxWSService upstoxWSService) {
         this.analyzerService = analyzerService;
+        this.upstoxWSService = upstoxWSService;
+    }
+
+    @PostMapping("/api/v1/listen")
+    public String listen(@RequestBody StockAnalyzerRequest request) throws ApiException {
+        upstoxWSService.listenWS(request.getAccessToken());
+        return "true";
     }
 
     @PostMapping("/api/v1/backtest")
@@ -36,20 +47,21 @@ public class StockController {
 
         VALID_INSTRUMENT
                 .forEach(instrument -> {
-                    analyzerService.populateDigests(
-                            instrument.getInstrumentKey(),
-                            instrument.getSymbol(),
-                            request.getStartDate(),
-                            request.getAccessToken(),
-                            request.getLookBackPeriod()
-                    );
+                    if (instrument.getSymbol().equalsIgnoreCase("MKPL")) {
+                        analyzerService.populateDigests(
+                                instrument.getInstrumentKey(),
+                                instrument.getSymbol(),
+                                request.getStartDate(),
+                                request.getAccessToken(),
+                                request.getLookBackPeriod()
+                        );
 
-                    analyzerService.backtest(
-                            instrument.getInstrumentKey(),
-                            instrument.getSymbol(),
-                            request.getStartDate(),
-                            request.getAccessToken());
-
+                        analyzerService.backtest(
+                                instrument.getInstrumentKey(),
+                                instrument.getSymbol(),
+                                request.getStartDate(),
+                                request.getAccessToken());
+                    }
                 });
 
         rungc();

@@ -1,6 +1,7 @@
 package com.egrub.scanner.service;
 
 import com.egrub.scanner.model.AnomalyData;
+import com.egrub.scanner.model.AnomalyNotificationFlags;
 import com.egrub.scanner.model.CandleData;
 import com.egrub.scanner.model.TDigestHelper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -15,8 +16,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.egrub.scanner.utils.Constants.*;
+import static com.egrub.scanner.utils.TechnicalIndicators.calculateOneSigma;
 import static com.egrub.scanner.utils.TechnicalIndicators.calculatePivotPoints;
 
 @Service
@@ -27,6 +30,8 @@ public class AnalyzerService {
 
     public final static Map<String, TDigestHelper> T_DIGEST_HELPER_MAP
             = new HashMap<>();
+
+    public final static Map<String, AnomalyNotificationFlags> FLAGS_MAP = new HashMap();
 
     private final static Map<String, AnomalyData> LATEST_ANOMALY = new HashMap<>();
     private final static Map<String, Integer> ANOMALY_CONSOLIDATION_COUNT = new HashMap<>();
@@ -169,6 +174,101 @@ public class AnalyzerService {
         double percentChange = (Math.abs(currentCandle.getClose()
                 - currentCandle.getOpen()) / currentCandle.getOpen()) * 100;
 
+        double average = priorCandles
+                .stream()
+                .limit(14)
+                .mapToDouble(
+                        candle ->
+                                (Math.abs(candle.getClose() - candle.getOpen()) /
+                                        candle.getOpen()))
+                .average()
+                .orElse(0);
+
+        double oneSigma = calculateOneSigma(
+                priorCandles
+                        .stream()
+                        .limit(14)
+                        .collect(Collectors.toList()));
+
+        AnomalyNotificationFlags flags;
+        if (FLAGS_MAP.containsKey(instrumentCode)) {
+            flags = FLAGS_MAP.get(instrumentCode);
+        } else {
+            flags = AnomalyNotificationFlags.builder()
+                    .build();
+        }
+
+        if (percentChange <= 1) {
+            flags.setConsolidationCount(flags.getConsolidationCount() + 1);
+        }
+
+        // Price beats the 99th quantile
+        // volume beats the 99th quantile
+        if (pricePercent > 99 && volumePercent > 95) {
+
+            // Populate the Anomaly map, with the latest one on top
+            if (ANOMALY_MAP.containsKey(instrumentCode)) {
+                List<AnomalyData> anomalyDataList = ANOMALY_MAP.get(instrumentCode);
+                anomalyDataList.add(0, anomaly);
+            } else {
+                List<AnomalyData> anomalyDataList = new ArrayList<>();
+                anomalyDataList.add(anomaly);
+                ANOMALY_MAP.put(instrumentCode, anomalyDataList);
+            }
+
+            Double minAnomalyClose = ANOMALY_MAP.get(instrumentCode)
+                    .stream()
+                    .mapToDouble(AnomalyData::getClose)
+                    .min()
+                    .orElse(0d);
+
+            // 6 times check, send alert first
+            /*if (percentChange > 20 * average) {
+                // Candle is Positive
+                if (currentCandle.getClose() > currentCandle.getOpen()) {
+                    if (!FLAGS_MAP.containsKey(instrumentCode) ||
+                            !flags.is6SigmaNotified()) {
+                        this.telegramService.sendMessage(anomaly,
+                                "6 Sigma Brekaout Alert");
+                        flags.set6SigmaNotified(true);
+                        FLAGS_MAP.put(instrumentCode, flags);
+                    } else {
+                        log.info("Already notified. Skipping this candle:{}",
+                                currentCandle);
+                    }
+                } else {
+                    log.info("Could be a Steep fall. Check once.");
+                }
+            } // consolidation breakout
+            else if (flags.getConsolidationCount() >= 1) {
+                if (!flags.isConsolidationNotified()
+                        && currentCandle.getClose() > minAnomalyClose) {
+                    this.telegramService.sendMessage(anomaly,
+                            "Consolidation Notifier Alert");
+                    flags.setConsolidationNotified(true);
+                } else {
+                    log.info("consolidation notified for candle:{}, count:{}", currentCandle,
+                            flags.getConsolidationCount());
+                }
+            }
+
+            // First Anomaly
+            else */if (!FLAGS_MAP.containsKey(instrumentCode) ||
+                    !flags.isNormalAnomalyNotified()) {
+                if (currentCandle.getClose() > currentCandle.getOpen()) {
+                    this.telegramService.sendMessage(anomaly,
+                            "First 5 Min Anomaly");
+                    flags.setNormalAnomalyNotified(true);
+                    FLAGS_MAP.put(instrumentCode, flags);
+                } else {
+                    flags.setGreenP99OutlierCount(flags.getGreenP99OutlierCount() + 1);
+                    log.info("Already notified 5 min anomalies:{}, count:{}",
+                            currentCandle, flags.getGreenP99OutlierCount());
+                }
+            }
+        }
+/*
+
         if (LATEST_ANOMALY.containsKey(instrumentCode)) {
 
             if (percentChange <= 1) {
@@ -222,7 +322,6 @@ public class AnalyzerService {
                                         "happening, between anomalies");
                         BREAKOUT_NOTIFICATION_MAP.put(instrumentCode, true);
                     }
-
                 } else {
                     if (!NON_BREAKOUT_NOTIFICATION_MAP.containsKey(instrumentCode)) {
                         this.telegramService.sendMessage(anomaly,
@@ -239,24 +338,23 @@ public class AnalyzerService {
                 double bodyToWick = 0d;
                 if (currentCandle.getClose() > currentCandle.getOpen()) {
                     bodyToWick = (currentCandle.getClose() - currentCandle.getOpen())
-                            / (currentCandle.getHigh() - currentCandle.getClose());
+                            / (currentCandle.getHigh() - currentCandle.getLow());
                 }
 
                 if (!BREAKOUT_NOTIFICATION_MAP.containsKey(instrumentCode)) {
                     if (bodyToWick > 90
                             && ((currentCandle.getClose() - currentCandle.getOpen())
-                            / currentCandle.getOpen()) * 100 > 4 * periodSMA) {
+                            / currentCandle.getOpen()) * 100 > 6 * oneSigma) {
                         this.telegramService.sendMessage(anomaly,
                                 "Anomaly - Breakout");
                         BREAKOUT_NOTIFICATION_MAP.put(instrumentCode, true);
                     } else {
                         this.telegramService.sendMessage(anomaly,
                                 "5Min first anomaly");
-                        BREAKOUT_NOTIFICATION_MAP.put(instrumentCode, true);
                     }
                 }
             }
-        }
+        }*/
     }
 
     public void backtest(

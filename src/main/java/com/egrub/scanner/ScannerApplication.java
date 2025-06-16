@@ -48,6 +48,8 @@ public class ScannerApplication {
         // 20 day volume > 1 Lakhs
         // Mcap between 200 and 50000 Cr
         List<String> lookup = new ArrayList<>();
+        lookup.add("MKPL");
+        lookup.add("RUBYMILLS");
         lookup.add("SHAH");
         lookup.add("JUBLINGREA");
         lookup.add("SCI");

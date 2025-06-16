@@ -6,6 +6,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TechnicalIndicators {
+
+    public static double calculateOneSigma(List<CandleData> candles) {
+        if (candles == null || candles.isEmpty()) return 0;
+
+        // Step 1: Compute mean of close prices
+        double mean = candles.stream()
+                .mapToDouble(CandleData::getClose)
+                .average()
+                .orElse(0);
+
+        // Step 2: Compute variance
+        double variance = candles.stream()
+                .mapToDouble(c -> Math.pow(c.getClose() - mean, 2))
+                .average()
+                .orElse(0);
+
+        // Step 3: Square root of variance = standard deviation (1σ)
+        return Math.sqrt(variance);
+    }
+
     // RSI (Relative Strength Index)
     public static double[] calculateRSI(List<CandleData> candles, int period) {
         double[] rsi = new double[candles.size()];
