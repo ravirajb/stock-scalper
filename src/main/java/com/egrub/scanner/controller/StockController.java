@@ -47,7 +47,7 @@ public class StockController {
 
         VALID_INSTRUMENT
                 .forEach(instrument -> {
-                    if (instrument.getSymbol().equalsIgnoreCase("MKPL")) {
+                    //if (instrument.getSymbol().equalsIgnoreCase("MKPL")) {
                         analyzerService.populateDigests(
                                 instrument.getInstrumentKey(),
                                 instrument.getSymbol(),
@@ -61,7 +61,7 @@ public class StockController {
                                 instrument.getSymbol(),
                                 request.getStartDate(),
                                 request.getAccessToken());
-                    }
+                    //}
                 });
 
         rungc();
