@@ -5,15 +5,18 @@ import com.tdunning.math.stats.TDigest;
 public class TDigestHelper {
     public TDigest priceDigest;
     public TDigest volumeDigest;
+    int size = 225;
 
     public TDigestHelper() {
-        this.priceDigest = TDigest.createDigest(500);
-        this.volumeDigest = TDigest.createDigest(500);
+        this.priceDigest = TDigest.createDigest(100);
+        this.volumeDigest = TDigest.createDigest(100);
     }
 
     public void add(double price, double volume) {
         this.priceDigest.add(price);
         this.volumeDigest.add(volume);
+        if (this.priceDigest.size() > 225) {
+        }
     }
 
     public double getPricePercentile(double price) {

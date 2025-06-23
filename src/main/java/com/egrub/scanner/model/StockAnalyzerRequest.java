@@ -8,6 +8,7 @@ import java.util.Map;
 public class StockAnalyzerRequest {
     private Map<String, String> scripMap;
     private int lookBackPeriod;
+    private int boxPeriod;
     private String accessToken;
     private String startDate;
 }

@@ -1,5 +1,6 @@
 package com.egrub.scanner.controller;
 
+import com.egrub.scanner.model.ScripListRequest;
 import com.egrub.scanner.model.StockAnalyzerRequest;
 import com.egrub.scanner.service.AnalyzerService;
 import com.egrub.scanner.service.UpstoxWSService;
@@ -41,18 +42,28 @@ public class StockController {
         return "true";
     }
 
+    @PostMapping("/api/v1/potential-stocks")
+    public String potentialStockBuilder(@RequestBody ScripListRequest request) throws IOException {
+        analyzerService.writeToFile(
+                analyzerService.getPotentialStocks(request.getLookupDate(),
+                        request.getAccessToken(),
+                        VALID_INSTRUMENT,
+                        request.getLookBackPeriod()));
+        return "true";
+    }
+
     @PostMapping("/api/v1/backtest")
     public String backtest(@RequestBody StockAnalyzerRequest request) throws IOException {
 
-
         VALID_INSTRUMENT
                 .forEach(instrument -> {
-                    //if (instrument.getSymbol().equalsIgnoreCase("MKPL")) {
+                    if (!instrument.getSymbol().contains("ETF")) {
                         analyzerService.populateDigests(
                                 instrument.getInstrumentKey(),
                                 instrument.getSymbol(),
                                 request.getStartDate(),
                                 request.getAccessToken(),
+                                request.getBoxPeriod(),
                                 request.getLookBackPeriod()
                         );
 
@@ -61,7 +72,7 @@ public class StockController {
                                 instrument.getSymbol(),
                                 request.getStartDate(),
                                 request.getAccessToken());
-                    //}
+                    }
                 });
 
         rungc();
@@ -83,6 +94,7 @@ public class StockController {
                             instrument.getSymbol(),
                             LocalDate.now().format(Constants.DATE_FORMATTER),
                             request.getAccessToken(),
+                            request.getBoxPeriod(),
                             request.getLookBackPeriod()
                     );
                 });

@@ -26,6 +26,35 @@ public class TechnicalIndicators {
         return Math.sqrt(variance);
     }
 
+    public static boolean isInBox(List<CandleData> candles, int n) {
+        if (candles.size() < n) return false;
+
+        double maxClose = candles.stream()
+                .limit(n)
+                .mapToDouble(CandleData::getClose)
+                .max()
+                .orElse(0d);
+
+        double minOpen = candles.stream()
+                .limit(n)
+                .mapToDouble(CandleData::getOpen)
+                .min()
+                .orElse(0d);
+
+        return !(((maxClose - minOpen) / minOpen) * 100 > 5);
+    }
+
+    public static boolean isInRange(List<CandleData> candles, int n) {
+        for (int i = 0; i < n; i++) {
+            CandleData candle = candles.get(i);
+            if (((candle.getClose() - candle.getOpen())
+                    / candle.getOpen()) * 100 > 3) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // RSI (Relative Strength Index)
     public static double[] calculateRSI(List<CandleData> candles, int period) {
         double[] rsi = new double[candles.size()];

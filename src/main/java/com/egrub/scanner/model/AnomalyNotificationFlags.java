@@ -14,4 +14,5 @@ public class AnomalyNotificationFlags {
     private boolean isNormalAnomalyNotified;
     private int consolidationCount;
     private int greenP99OutlierCount;
+    private boolean isValidFirstAnomalyNotified;
 }

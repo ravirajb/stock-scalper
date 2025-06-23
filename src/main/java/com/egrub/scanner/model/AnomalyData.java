@@ -3,8 +3,6 @@ package com.egrub.scanner.model;
 import lombok.Builder;
 import lombok.Data;
 
-import java.util.List;
-
 @Data
 @Builder
 public class AnomalyData {
@@ -15,6 +13,7 @@ public class AnomalyData {
     private Long cumulativeVolume;
     private Double volumeSMA;
     private Double volumeRatio;
+    private boolean isTightRage;
     private double pivot, r1, s1, r2, s2;
 
     @Override
@@ -26,6 +25,7 @@ public class AnomalyData {
                 "  currentVolume: " + currentVolume + "\n" +
                 "  cumulativeVolume: " + cumulativeVolume + "\n" +
                 "  volumeSMA: " + volumeSMA + "\n" +
+                "  isTightRage: " + isTightRage + "\n" +
                 "  volumeRatio: " + volumeRatio + "\n" +
                 "  pivot: " + pivot + "\n" +
                 "  r1: " + r1 + "\n" +
