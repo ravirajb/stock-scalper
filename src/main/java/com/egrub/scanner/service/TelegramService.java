@@ -20,7 +20,7 @@ import java.util.Map;
 public class TelegramService {
     private final ObjectMapper objectMapper;
 
-    private static final String BOT_TOKEN = "7785184152:AAEWQ7AFAX9fUCnw773Zo0yAP06GzikrcZ4";
+    private static final String BOT_TOKEN = "demo";
     private static final String CHAT_ID = "@inv_grubber"; // Get the public channel ID
     private static final String TELEGRAM_API_URL = "https://api.telegram.org/bot";
 
