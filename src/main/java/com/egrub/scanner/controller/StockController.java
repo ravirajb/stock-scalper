@@ -2,7 +2,9 @@ package com.egrub.scanner.controller;
 
 import com.egrub.scanner.model.ScripListRequest;
 import com.egrub.scanner.model.StockAnalyzerRequest;
+import com.egrub.scanner.model.eod.TickerRequest;
 import com.egrub.scanner.service.AnalyzerService;
+import com.egrub.scanner.service.EodHdService;
 import com.egrub.scanner.service.UpstoxWSService;
 import com.egrub.scanner.utils.Constants;
 import com.upstox.ApiException;
@@ -26,15 +28,37 @@ import static com.egrub.scanner.utils.Constants.*;
 public class StockController {
     private final AnalyzerService analyzerService;
     private final UpstoxWSService upstoxWSService;
+    private final EodHdService eodHdService;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> scheduledTask;
 
     public StockController(AnalyzerService analyzerService,
-                           UpstoxWSService upstoxWSService) {
+                           UpstoxWSService upstoxWSService,
+                           EodHdService eodHdService) {
         this.analyzerService = analyzerService;
         this.upstoxWSService = upstoxWSService;
+        this.eodHdService = eodHdService;
     }
+
+    @PostMapping("/api/v1/exchange-symbols")
+    public String fetchSymbols(@RequestBody TickerRequest tickerRequest) {
+
+        this.eodHdService.getAllSymbols(tickerRequest.getExchangeToken(),
+                tickerRequest.getApiToken());
+
+        return "true";
+    }
+
+    @PostMapping("/api/v1/analyse-us-stocks")
+    public String analyseUsStocks(@RequestBody TickerRequest tickerRequest)
+            throws IOException {
+        analyzerService.writeToFile(
+                this.eodHdService.getDailyCandles(tickerRequest.getExchangeToken(),
+                        tickerRequest.getApiToken()), "us_23Jun.csv");
+        return "true";
+    }
+
 
     @PostMapping("/api/v1/listen")
     public String listen(@RequestBody StockAnalyzerRequest request) throws ApiException {
@@ -48,7 +72,7 @@ public class StockController {
                 analyzerService.getPotentialStocks(request.getLookupDate(),
                         request.getAccessToken(),
                         VALID_INSTRUMENT,
-                        request.getLookBackPeriod()));
+                        request.getLookBackPeriod()), request.getFileName());
         return "true";
     }
 

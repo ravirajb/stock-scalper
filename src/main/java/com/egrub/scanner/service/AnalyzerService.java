@@ -533,14 +533,14 @@ public class AnalyzerService {
 
     }
 
-    public void writeToFile(List<PotentialInstrument> potentialList) throws IOException {
+    public void writeToFile(List<PotentialInstrument> potentialList, String fileName) throws IOException {
 
         CsvMapper mapper = new CsvMapper();
         CsvSchema schema = mapper.schemaFor(PotentialInstrument.class).withHeader();
 
         // Write to file
         ObjectWriter writer = mapper.writer(schema);
-        writer.writeValue(new File("potentialStocks.csv"), potentialList);
+        writer.writeValue(new File(fileName), potentialList);
     }
 
     public void writeToFile() throws IOException {

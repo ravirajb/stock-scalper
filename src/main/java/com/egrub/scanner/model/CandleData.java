@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 @ToString
 public class CandleData {
+
     private String timestamp;
     private Double open;
     private Double high;

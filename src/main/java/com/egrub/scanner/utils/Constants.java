@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 public class Constants {
+
     public static final String INTRADAY_BASE_URL = "https://api.upstox.com/v3/historical-candle/intraday/";
     public static final String HISTORICAL_BASE_URL = "https://api.upstox.com/v3/historical-candle/";
 

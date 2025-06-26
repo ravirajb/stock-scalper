@@ -2,6 +2,7 @@ package com.egrub.scanner;
 
 import com.egrub.scanner.model.upstox.Instrument;
 import com.egrub.scanner.service.InstrumentsLoader;
+import com.egrub.scanner.service.ValidatorService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -17,12 +18,20 @@ import static com.egrub.scanner.utils.Constants.VALID_INSTRUMENT;
 @Log4j2
 public class ScannerApplication {
 
+    private final ValidatorService validatorService;
+
+    public ScannerApplication(ValidatorService validatorService) {
+        this.validatorService = validatorService;
+    }
+
     public static void main(String[] args) {
         SpringApplication.run(ScannerApplication.class, args);
     }
 
     @PostConstruct
     public void load() {
+
+        // this.validatorService.validate();
 
         log.info("loading the instruments");
         List<Instrument> instrumentList = InstrumentsLoader.loadInstrumentsFromCsv();

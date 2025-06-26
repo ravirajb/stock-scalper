@@ -7,4 +7,5 @@ public class ScripListRequest {
     private String lookupDate;
     private int lookBackPeriod;
     private String accessToken;
+    private String fileName;
 }
