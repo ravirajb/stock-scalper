@@ -71,4 +71,53 @@ public class PotentialInstrument {
     @JsonProperty("atrLast20Days")
     private double atrLast20Days;
 
+    @JsonProperty("isBetween10And20EMA")
+    private boolean isBetween10And20EMA;
+
+    @JsonProperty("averageDeliveryPc")
+    private double averageDeliveryPc;
+
+    @JsonProperty("todayDeliveryPc")
+    private double todayDeliveryPc;
+
+    @JsonProperty("marketCap")
+    private double marketCap;
+
+    @JsonProperty("freeFloat")
+    private double freeFloat;
+
+    @JsonProperty("dailyVolatility")
+    private double dailyVolatility;
+
+    @JsonProperty("annualVolatility")
+    private double annualVolatility;
+
+    @JsonProperty("activeSeries")
+    private String activeSeries;
+
+    @JsonProperty("is30PercentRiseAnd9PercentCorrection15Days")
+    private boolean is30PercentRiseAnd9PercentCorrection15Days;
+
+    @JsonProperty("is25PercentRiseAnd8PercentCorrection15Days")
+    private boolean is25PercentRiseAnd8PercentCorrection15Days;
+
+    @JsonProperty("is30PercentRiseAnd7PercentCorrection15Days")
+    private boolean is30PercentRiseAnd7PercentCorrection15Days;
+
+    @JsonProperty("is20PercentRiseAnd6PercentCorrection15Days")
+    private boolean is20PercentRiseAnd6PercentCorrection15Days;
+
+    @JsonProperty("is20PercentRiseAnd6PercentCorrectiony7Days")
+    private boolean is20PercentRiseAnd6PercentCorrectiony7Days;
+
+    @JsonProperty("is15PercentRiseAnd5PercentCorrection7Days")
+    private boolean is15PercentRiseAnd5PercentCorrection7Days;
+
+    @JsonProperty("is15PercentRiseAnd5PercentCorrection10Days")
+    private boolean is15PercentRiseAnd5PercentCorrection10Days;
+
+    @JsonProperty("is20PercentRiseAnd6PercentCorrection10Days")
+    private boolean is20PercentRiseAnd6PercentCorrection10Days;
+
+
 }

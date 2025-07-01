@@ -3,19 +3,24 @@ package com.egrub.scanner.controller;
 import com.egrub.scanner.model.ScripListRequest;
 import com.egrub.scanner.model.StockAnalyzerRequest;
 import com.egrub.scanner.model.eod.TickerRequest;
+import com.egrub.scanner.model.nse.DateDeliveryPercent;
 import com.egrub.scanner.service.AnalyzerService;
 import com.egrub.scanner.service.EodHdService;
 import com.egrub.scanner.service.UpstoxWSService;
+import com.egrub.scanner.service.ValidatorService;
 import com.egrub.scanner.utils.Constants;
 import com.upstox.ApiException;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -29,16 +34,19 @@ public class StockController {
     private final AnalyzerService analyzerService;
     private final UpstoxWSService upstoxWSService;
     private final EodHdService eodHdService;
+    private final ValidatorService validatorService;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> scheduledTask;
 
     public StockController(AnalyzerService analyzerService,
                            UpstoxWSService upstoxWSService,
+                           ValidatorService validatorService,
                            EodHdService eodHdService) {
         this.analyzerService = analyzerService;
         this.upstoxWSService = upstoxWSService;
         this.eodHdService = eodHdService;
+        this.validatorService = validatorService;
     }
 
     @PostMapping("/api/v1/exchange-symbols")
@@ -67,13 +75,51 @@ public class StockController {
     }
 
     @PostMapping("/api/v1/potential-stocks")
-    public String potentialStockBuilder(@RequestBody ScripListRequest request) throws IOException {
-        analyzerService.writeToFile(
-                analyzerService.getPotentialStocks(request.getLookupDate(),
-                        request.getAccessToken(),
-                        VALID_INSTRUMENT,
-                        request.getLookBackPeriod()), request.getFileName());
+    public String potentialStockBuilder(@RequestBody ScripListRequest request) {
+
+        LocalDate date =
+                LocalDate.parse(request.getLookupDate(), DATE_FORMATTER);
+
+        List<LocalDate> workingDays = new ArrayList<>();
+        while (workingDays.size() < 8) {
+            date = date.minus(1, ChronoUnit.DAYS);
+            if (!(date.getDayOfWeek() == DayOfWeek.SATURDAY ||
+                    date.getDayOfWeek() == DayOfWeek.SUNDAY)) {
+                workingDays.add(date);
+            }
+        }
+
+        workingDays.forEach(day -> {
+            try {
+                analyzerService.writeToFile(
+                        analyzerService.getPotentialStocks(
+                                day.format(DATE_FORMATTER),
+                                request.getAccessToken(),
+                                VALID_INSTRUMENT,
+                                request.getLookBackPeriod()),
+                        request.getFileName() + "_" + day + ".csv");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
         return "true";
+    }
+
+    @GetMapping("/trade-info/{symbol}/{toDate}/{period}")
+    public Map<String, List<DateDeliveryPercent>> getTradeInfo(@PathVariable String symbol,
+                                                               @PathVariable String toDate,
+                                                               @PathVariable int period) {
+        Map<String, List<DateDeliveryPercent>> results = new HashMap<>();
+        VALID_INSTRUMENT.forEach(
+                instrument -> {
+                    results.put(instrument.getSymbol(),
+                            validatorService.getDeliverablePercentage(instrument.getSymbol(),
+                                    toDate,
+                                    period));
+                }
+        );
+        return results;
     }
 
     @PostMapping("/api/v1/backtest")

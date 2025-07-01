@@ -19,6 +19,9 @@ public class Constants {
 
     public static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    public static final DateTimeFormatter NSE_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+
     public static final List<Instrument> VALID_INSTRUMENT = new ArrayList<>();
     public static final Map<String, List<AnomalyData>> ANOMALY_MAP = new HashMap<>();
 
@@ -74,20 +77,39 @@ public class Constants {
         return Duration.between(now, nextExecution).getSeconds();
     }
 
-    public static String getPreviousDate(String dateStr) {
+    public static boolean isTodayWorkingDay(String dateStr) {
+        DateTimeFormatter formatter = DATE_FORMATTER;
         LocalDate date =
-                LocalDate.parse(dateStr, DATE_FORMATTER);
+                LocalDate.parse(dateStr, formatter);
+
+        return !(date.getDayOfWeek() == DayOfWeek.SUNDAY
+                || date.getDayOfWeek() == DayOfWeek.SATURDAY);
+
+    }
+
+    public static String getPreviousDate(String dateStr, boolean isNSE) {
+        DateTimeFormatter formatter = DATE_FORMATTER;
+        if (isNSE) {
+            formatter = NSE_DATE_FORMATTER;
+        }
+        LocalDate date =
+                LocalDate.parse(dateStr, formatter);
         do {
             date = date.minus(1, ChronoUnit.DAYS);
         } while (date.getDayOfWeek() == DayOfWeek.SUNDAY
                 || date.getDayOfWeek() == DayOfWeek.SATURDAY);
 
-        return date.format(DATE_FORMATTER);
+        return date.format(formatter);
     }
 
-    public static String getStartDate(String dateStr, int lookBackPeriod) {
+    public static String getStartDate(String dateStr, int lookBackPeriod, boolean isNSE) {
+        DateTimeFormatter formatter = DATE_FORMATTER;
+        if (isNSE) {
+            formatter = NSE_DATE_FORMATTER;
+        }
+
         LocalDate date =
-                LocalDate.parse(dateStr, DATE_FORMATTER);
+                LocalDate.parse(dateStr, formatter);
 
         List<LocalDate> workingDays = new ArrayList<>();
         while (workingDays.size() < lookBackPeriod - 1) {
@@ -98,7 +120,7 @@ public class Constants {
             }
         }
 
-        return workingDays.get(workingDays.size() - 1).format(DATE_FORMATTER);
+        return workingDays.get(workingDays.size() - 1).format(formatter);
     }
 
     public static void rungc() {

@@ -1,16 +1,21 @@
 package com.egrub.scanner.service;
 
 import com.egrub.scanner.model.*;
+import com.egrub.scanner.model.nse.DateDeliveryPercent;
 import com.egrub.scanner.model.upstox.Instrument;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -23,6 +28,8 @@ import static com.egrub.scanner.utils.TechnicalIndicators.*;
 public class AnalyzerService {
     private final UpStoxService upStoxService;
     private final TelegramService telegramService;
+    private final MongoTemplate mongoTemplate;
+    private final ValidatorService validatorService;
 
     public final static Map<String, TDigestHelper> T_DIGEST_HELPER_MAP
             = new HashMap<>();
@@ -49,9 +56,26 @@ public class AnalyzerService {
             "240", "minutes"*/);
 
     public AnalyzerService(UpStoxService upStoxService,
-                           TelegramService telegramService) {
+                           TelegramService telegramService,
+                           ValidatorService validatorService,
+                           MongoTemplate mongoTemplate) {
         this.upStoxService = upStoxService;
         this.telegramService = telegramService;
+        this.mongoTemplate = mongoTemplate;
+        this.validatorService = validatorService;
+    }
+
+    private String convertToddMmYyyy(String dateStr) {
+        Pattern yyyyMMddPattern = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
+        if (dateStr == null || !yyyyMMddPattern.matcher(dateStr).matches()) {
+            throw new IllegalArgumentException("Date must be in yyyy-MM-dd format");
+        }
+
+        DateTimeFormatter inputFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        DateTimeFormatter outputFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        LocalDate date = LocalDate.parse(dateStr, inputFormat);
+        return date.format(outputFormat);
     }
 
     public List<PotentialInstrument> getPotentialStocks(String fromDate,
@@ -79,19 +103,84 @@ public class AnalyzerService {
 
         log.info("size: {}", finalInstruments.size());
 
+        AtomicInteger count = new AtomicInteger();
+
         finalInstruments
                 .forEach(instrument -> {
+
+                    boolean isWorkingDay = isTodayWorkingDay(fromDate);
+
+                    log.info("loop:{}", count.getAndIncrement());
+
                     try {
-                        // if (instrument.getSymbol().equalsIgnoreCase("EUREKAFORB")) {
+                        // if (instrument.getSymbol().equalsIgnoreCase("SHANTI")) {
                         List<CandleData> candles = upStoxService.getHistoricalCandles(
                                 instrument.getInstrumentKey(),
                                 instrument.getSymbol(),
                                 "1",
                                 "days",
-                                getPreviousDate(fromDate),
-                                getStartDate(fromDate, lookbackPeriod),
+                                isWorkingDay ? fromDate :
+                                        getPreviousDate(fromDate, false),
+                                getStartDate(fromDate, lookbackPeriod, false),
                                 accessToken);
 
+                        double deliveryPercent = 0.0;
+                        int deliveryRecords = 0;
+                        double todayDeliveryPc = 0;
+                        double deliveryPcAverage = 0;
+                        double marketCap = 0, freeFloat = 0;
+                        double dailyVolatility = 0, annualVolatility = 0;
+                        String activeSeries = "";
+
+                        log.info("processing delivery pecentage for: {}",
+                                instrument.getInstrumentKey());
+
+                        try {
+                            List<DateDeliveryPercent> deliveryPercents =
+                                    validatorService.getDeliverablePercentage(
+                                            instrument.getSymbol(),
+                                            convertToddMmYyyy(
+                                                    isWorkingDay ? fromDate :
+                                                            getPreviousDate(fromDate,
+                                                                    false)),
+                                            30);
+                            if (deliveryPercents != null && !deliveryPercents.isEmpty()) {
+                                DateDeliveryPercent firstRec = deliveryPercents.get(0);
+                                marketCap = firstRec.getMarketCap();
+                                freeFloat = firstRec.getFreeFloat();
+                                dailyVolatility = firstRec.getDailyVolatility();
+                                annualVolatility = firstRec.getAnnualVolatility();
+                                activeSeries = firstRec.getActiveSeries();
+
+                                for (DateDeliveryPercent entry : deliveryPercents) {
+                                    if (!entry
+                                            .getDate()
+                                            .equals(isWorkingDay ? fromDate :
+                                                    getPreviousDate(fromDate,
+                                                            false)
+                                            )) {
+                                        deliveryPercent += entry.getPercent();
+                                        deliveryRecords++;
+                                    } else {
+                                        todayDeliveryPc = entry.getPercent();
+                                    }
+                                }
+
+                                deliveryPcAverage = deliveryRecords == 0 ? 0 :
+                                        (deliveryPercent / deliveryRecords);
+                            }
+                        } catch (Exception ex) {
+                            log.error("error while parsing delivery % for:{} ",
+                                    instrument.getSymbol());
+                        }
+
+                        double ema10 = 0d;
+                        double ema20 = 0d;
+
+                        if (candles.size() > 21) {
+                            ema10 = calculatePeriodEMA(candles, 10);
+                            ema20 = calculatePeriodEMA(candles, 20);
+                        }
 
                         boolean swingStock = isOptimalIndianSwingBreakout(candles);
                         boolean isBreakoutReady = isBreakoutReady(candles);
@@ -112,7 +201,61 @@ public class AnalyzerService {
                         boolean is5BoxOf1Percent = isBox(candles, 5, 1);
                         boolean is5BoxOf2Percent = isBox(candles, 5, 2);
                         boolean is5BoxOf3Percent = isBox(candles, 5, 3);
-                        boolean isXPercentInLastNDays = isXPercentInLastNDays(candles, 7, 6);
+                        boolean isXPercentInLastNDays = isXPercentInLastNDays(candles,
+                                7, 6);
+
+                        boolean is30PercentRiseAnd9PercentCorrection15Days =
+                                checkSwingAndCorrection(candles,
+                                        15,
+                                        30,
+                                        9);
+
+                        boolean is25PercentRiseAnd8PercentCorrection15Days =
+                                checkSwingAndCorrection(candles,
+                                        15,
+                                        25,
+                                        8);
+
+                        boolean is30PercentRiseAnd7PercentCorrection15Days =
+                                checkSwingAndCorrection(candles,
+                                        15,
+                                        30,
+                                        7);
+
+                        boolean is20PercentRiseAnd6PercentCorrection15Days =
+                                checkSwingAndCorrection(candles,
+                                        15,
+                                        20,
+                                        6);
+
+
+                        boolean is20PercentRiseAnd6PercentCorrectiony7Days =
+                                checkSwingAndCorrection(candles,
+                                        7,
+                                        20,
+                                        6);
+
+                        boolean is15PercentRiseAnd5PercentCorrection7Days =
+                                checkSwingAndCorrection(candles,
+                                        7,
+                                        15,
+                                        5);
+
+                        boolean is15PercentRiseAnd5PercentCorrection10Days =
+                                checkSwingAndCorrection(candles,
+                                        10,
+                                        15,
+                                        5);
+
+                        boolean is20PercentRiseAnd6PercentCorrection10Days =
+                                checkSwingAndCorrection(candles,
+                                        10,
+                                        20,
+                                        6);
+
+
+                        boolean isBetween10And20EMA = candles.get(0).getClose() <= ema10
+                                && candles.get(0).getClose() >= ema20;
 
                         boolean is21BoxOf2Percent = false, is21BoxOf3Percent = false;
                         if (candles.size() > 22) {
@@ -147,27 +290,39 @@ public class AnalyzerService {
                                 .is21Day2Percent(is21BoxOf2Percent)
                                 .is21Day3Percent(is21BoxOf3Percent)
                                 .atrLast20Days(atr[0])
+                                .activeSeries(activeSeries)
+                                .marketCap(marketCap)
+                                .annualVolatility(annualVolatility)
+                                .freeFloat(freeFloat)
+                                .dailyVolatility(dailyVolatility)
+                                .averageDeliveryPc(deliveryPcAverage)
+                                .todayDeliveryPc(todayDeliveryPc)
                                 .is6PercentInLast7Days(isXPercentInLastNDays)
+                                .isBetween10And20EMA(isBetween10And20EMA)
+                                .is20PercentRiseAnd6PercentCorrection15Days(is20PercentRiseAnd6PercentCorrection15Days)
+                                .is30PercentRiseAnd7PercentCorrection15Days(is30PercentRiseAnd7PercentCorrection15Days)
+                                .is30PercentRiseAnd9PercentCorrection15Days(is30PercentRiseAnd9PercentCorrection15Days)
+                                .is25PercentRiseAnd8PercentCorrection15Days(is25PercentRiseAnd8PercentCorrection15Days)
+                                .is20PercentRiseAnd6PercentCorrection10Days(is20PercentRiseAnd6PercentCorrection10Days)
+                                .is15PercentRiseAnd5PercentCorrection10Days(is15PercentRiseAnd5PercentCorrection10Days)
+                                .is20PercentRiseAnd6PercentCorrectiony7Days(is20PercentRiseAnd6PercentCorrectiony7Days)
+                                .is15PercentRiseAnd5PercentCorrection7Days(is15PercentRiseAnd5PercentCorrection7Days)
                                 .build();
 
                         validInstruments.add(pontentialInstrument);
 
-                        log.info("symbol: {}, " +
-                                        "swingStock: {}, " +
-                                        "isBreakoutReady: {}, " +
-                                        "isThreeWhiteSoldiers: {}, " +
-                                        "isNR4Nr7: {}",
-                                instrument.getSymbol(),
-                                swingStock,
-                                isBreakoutReady,
-                                isThreeWhiteSoldiers,
-                                isNR4Nr7);
+                        /*if (count.get() % 100 == 0) {
+                            Thread.sleep(10000);
+                        } else {
+                            Thread.sleep(300);
+                        }*/
+
                         //}
                     } catch (Exception e) {
-                        log.error("error");
+                        log.error("error:{}, symbol:{} ", e.getMessage(), instrument.getSymbol());
                     }
                 });
-
+        log.info("finished processing for date:{}", fromDate);
         return validInstruments;
     }
 
@@ -196,9 +351,9 @@ public class AnalyzerService {
                             instrumentCode,
                             key,
                             value,
-                            getPreviousDate(fromDate),
+                            getPreviousDate(fromDate, false),
                             getStartDate(fromDate,
-                                    key.equals("5") ? 3 : lookbackPeriod),
+                                    key.equals("5") ? 3 : lookbackPeriod, false),
                             accessToken);
 
                     unitCandleMap.put(key + "-" + value, candles);

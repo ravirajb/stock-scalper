@@ -31,7 +31,7 @@ public class ScannerApplication {
     @PostConstruct
     public void load() {
 
-        // this.validatorService.validate();
+        // this.validatorService.fetchAndSaveDeliveryData();
 
         log.info("loading the instruments");
         List<Instrument> instrumentList = InstrumentsLoader.loadInstrumentsFromCsv();

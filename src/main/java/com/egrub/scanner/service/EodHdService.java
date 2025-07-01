@@ -32,8 +32,6 @@ public class EodHdService {
 
     Map<String, List<CandleData>> TICKER_DATA_MAP = new HashMap<>();
 
-    private static final String TICKER_URL = "https://eodhd.com/api/exchange-symbol-list/NYSE?api_token=6843137157f047.62923263&fmt=json";
-
     public List<Tickers> getAllSymbols(String exchange, String eodAPIKey) {
 
         String url = UriComponentsBuilder.fromHttpUrl(

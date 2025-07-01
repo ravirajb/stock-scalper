@@ -4,9 +4,77 @@ import com.egrub.scanner.model.CandleData;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class CandleListEvaluator {
+
+    public static boolean checkSwingAndCorrection(List<CandleData> candles,
+                                                  int x,
+                                                  double risePercent,
+                                                  double correctionPercent) {
+        if (candles == null || candles.size() < x) return false;
+
+        List<CandleData> recent = candles.subList(candles.size() - x, candles.size());
+
+        // Step 1: Find swing low
+        double minClose = Double.MAX_VALUE;
+        int minIndex = -1;
+        for (int i = 0; i < recent.size(); i++) {
+            if (recent.get(i).getClose() != null && recent.get(i).getClose() < minClose) {
+                minClose = recent.get(i).getClose();
+                minIndex = i;
+            }
+        }
+
+        if (minIndex == -1) return false;
+
+        // Step 2: Find swing high after swing low
+        double maxClose = Double.MIN_VALUE;
+        int maxIndex = -1;
+        for (int i = minIndex; i < recent.size(); i++) {
+            if (recent.get(i).getClose() != null && recent.get(i).getClose() > maxClose) {
+                maxClose = recent.get(i).getClose();
+                maxIndex = i;
+            }
+        }
+
+        if (maxIndex == -1) return false;
+
+        // Step 3: Compute rise and correction
+        Double recentCloseObj = recent.get(recent.size() - 1).getClose();
+
+        if (recentCloseObj == null || minClose == 0 || maxClose == 0) return false;
+
+        double rise = ((maxClose - minClose) / minClose) * 100.0;
+        double correction = ((maxClose - recentCloseObj) / maxClose) * 100.0;
+
+        return rise >= risePercent && correction >= correctionPercent;
+    }
+
+    public static double calculatePeriodEMA(List<CandleData> candles, int period) {
+        if (candles.size() < period) {
+            throw new IllegalArgumentException("Not enough candles to compute EMA");
+        }
+
+        // Clone and sort oldest to newest
+        List<CandleData> sortedCandles = new ArrayList<>(candles);
+        sortedCandles.sort(Comparator.comparing(CandleData::getTimestamp));
+
+        double multiplier = 2.0 / (period + 1);
+
+        // Step 1: Initialize EMA with the first close (not SMA)
+        double ema = sortedCandles.get(0).getClose();
+
+        // Step 2: Apply EMA formula recursively over all candles
+        for (int i = 1; i < sortedCandles.size(); i++) {
+            double close = sortedCandles.get(i).getClose();
+            ema = (close - ema) * multiplier + ema;
+        }
+
+        return ema;
+    }
+
     public static boolean isVolumeContraction(List<CandleData> data) {
         if (data.size() < 5) return false;
 
@@ -33,13 +101,25 @@ public class CandleListEvaluator {
         return last3.get(2).getClose() < last3.get(1).getClose() && last3.get(1).getClose() < last3.get(0).getClose();
     }
 
+
     public static boolean isXPercentInLastNDays(List<CandleData> data, int n, int percent) {
 
         for (int i = 0; i < n; i++) {
             CandleData candleData = data.get(i);
-            if ((((candleData.getClose() - candleData.getOpen())
-                    / candleData.getOpen()) * 100 > percent)) {
-                return true;
+
+            double sum = 0.0;
+            if (data.size() > i + 10) {
+                for (int j = i; j <= i + 10; j++) {
+                    sum += data.get(j).getVolume();
+                }
+
+                double sumAverage = sum / 10;
+
+                if ((((candleData.getClose() - candleData.getOpen())
+                        / candleData.getOpen()) * 100 > percent) &&
+                        data.get(i).getVolume() > sumAverage * 1.5) {
+                    return true;
+                }
             }
         }
 
